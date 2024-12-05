@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Classification</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Vehicle Classification Assistant</h1>
+        <form method="POST" action="/" id="vehicle-form">
+            <div class="form-group">
+                <label for="year">Year:</label>
+                <input type="text" id="year" name="year" placeholder="2025" required>
+            </div>
+            <div class="form-group">
+                <label for="make">Make:</label>
+                <input type="text" id="make" name="make" placeholder="Ford" required>
+            </div>
+            <div class="form-group">
+                <label for="model">Model:</label>
+                <input type="text" id="model" name="model" placeholder="F-150" required>
+            </div>
+            <div class="form-group">
+                <label for="trim">Trim:</label>
+                <input type="text" id="trim" name="trim" placeholder="Tremor">
+            </div>
+            <button type="submit" id="submit-btn">Classify</button>
+        </form>
+
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" class="hidden">
+            <div class="spinner"></div>
+            <p>Processing your request...</p>
+        </div>
+
+        <!-- Display the result -->
+        {% if result %}
+        <div class="result">
+            <h2>Classification Result:</h2>
+            <pre class="wrapped">{{ result }}</pre>
+        </div>
+        {% endif %}
+
+        <!-- Display errors -->
+        {% if error %}
+        <div class="error">
+            <p style="color: red;">{{ error }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // JavaScript to handle the spinner
+        document.getElementById("vehicle-form").addEventListener("submit", function (e) {
+            // Show the loading spinner
+            document.getElementById("loading-spinner").classList.remove("hidden");
+            // Disable the submit button to prevent multiple submissions
+            document.getElementById("submit-btn").disabled = true;
+        });
+    </script>
+</body>
+</html>
