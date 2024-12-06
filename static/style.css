@@ -5,7 +5,6 @@ body {
     padding: 20px;
     display: flex;
     justify-content: center; /* Center the container horizontally */
-    align-items: center;    /* Center the container vertically */
 }
 
 .container {
@@ -73,18 +72,25 @@ button:hover {
 
 .result {
     margin-top: 20px;
-    text-align: left; /* Ensure left alignment for result text */
+    background-color: #f9f9f9; /* Match background color for readability */
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+    color: #333; /* Ensure good contrast */
+    border: 1px solid #ccc; /* Light border for better structure */
 }
 
 pre.wrapped {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow-x: hidden;
+    white-space: pre-line;    /* Preserve line breaks and wrap long text */
+    word-wrap: break-word;    /* Handle long words properly */
+    overflow-x: hidden;       /* Prevent horizontal scrolling */
     background-color: #f9f9f9;
     padding: 10px;
     border-radius: 4px;
-    font-family: monospace;
-    text-align: left;
+    font-family: monospace;   /* Use monospace font for preformatted text */
+    text-align: left;         /* Left-align text */
+    font-size: 13px;          /* Slightly smaller font for preformatted blocks */
 }
 
 .hidden {

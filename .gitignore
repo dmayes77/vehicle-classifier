@@ -1,1 +1,16 @@
+ve# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment Variables
+.env
+
+# Virtual Environments
 venv/
+*.egg-info/
+
+# IDE Configurations
+*.vscode/
+.idea/
+nv/
