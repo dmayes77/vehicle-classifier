@@ -7,7 +7,6 @@ import os
 import time
 import requests
 import json
-import logging
 import re
 
 # Initialize Flask app
@@ -22,13 +21,29 @@ API_KEY = os.getenv("API_KEY")
 # OpenAI API endpoint for chat models
 API_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 
-# Configure logging for debugging
-logging.basicConfig(level=logging.DEBUG)
+
+def parse_capacity(capacity):
+    """
+    Parses the capacity string and returns a tuple with min and max capacities.
+    Examples of valid inputs: '3-6 passengers', '5 passengers', '4-5', '3'.
+    """
+    if not capacity:
+        return None, None
+
+    numbers = list(map(int, re.findall(r'\d+', capacity)))
+
+    if len(numbers) == 1:
+        return numbers[0], numbers[0]  # Single capacity (e.g., '3 passengers')
+    elif len(numbers) >= 2:
+        return min(numbers), max(numbers)  # Range capacity (e.g., '3-6 passengers')
+
+    return None, None
 
 
 def categorize_vehicle(length, width, capacity):
     """
-    Categorize vehicle based on length, width, and passenger capacity, and provide a dynamic human-friendly reason.
+    Categorize vehicle based on length, width, and passenger capacity range,
+    and provide a dynamic human-friendly reason.
     """
     length = length if length is not None else 0
     width = width if width is not None else 0
@@ -36,34 +51,24 @@ def categorize_vehicle(length, width, capacity):
     if length <= 0 or width <= 0:
         return "Invalid inputs", "Please provide valid positive numbers for length and width."
 
-    capacity_description = f"{capacity} passengers" if capacity is not None else "an unspecified number of passengers"
+    min_capacity, max_capacity = parse_capacity(capacity)
+    capacity_description = f"{min_capacity}-{max_capacity} passengers" if min_capacity and max_capacity else "an unspecified number of passengers"
 
-    if length <= 170 and width <= 75 and (capacity is None or capacity <= 3):
+    if length <= 170 and width <= 75 and (max_capacity is None or max_capacity <= 3):
         return "Small", f"<p>With a length of {length} inches, a width of {width} inches, and seating for {capacity_description}, this compact vehicle is ideal for city driving, easy parking, and daily commuting.</p>"
-    elif length <= 220 and width <= 80 and (capacity is None or capacity <= 5):
+    elif length <= 220 and width <= 80 and (max_capacity is None or max_capacity <= 5):
         return "Medium", f"<p>Measuring {length} inches in length and {width} inches in width, with seating for {capacity_description}, this vehicle offers a great balance of space and maneuverability for small families and everyday use.</p>"
-    elif length <= 235 and width <= 85 and (capacity is None or capacity <= 7):
+    elif length <= 235 and width <= 85 and (max_capacity is None or max_capacity <= 7):
         return "Large", f"<p>With a length of {length} inches, a width of {width} inches, and seating for {capacity_description}, this spacious vehicle is perfect for larger families, road trips, and group outings.</p>"
     else:
         return "Extra Large", f"<p>With an impressive length of {length} inches, a width of {width} inches, and seating for {capacity_description}, this vehicle offers maximum space and comfort, making it ideal for big families, long road trips, or those who love extra room.</p>"
 
 
-from functools import lru_cache
-import time
-import requests
-import json
-import logging
-import re
-
 # Caching results to avoid redundant API calls
 @lru_cache(maxsize=100)
 def call_gpt_for_vehicle_info(year, make, model, trim):
-    """
-    Sends vehicle details (year, make, model, trim) to GPT for detailed classification and attributes.
-    Retries up to 5 times with a 1-second wait between calls until length and width are valid.
-    """
     if not API_KEY:
-        raise ValueError("Error: API key is missing. Please set it in the .env file.")
+        return {"error": "Error: API key is missing. Please set it in the .env file."}
 
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -75,8 +80,8 @@ def call_gpt_for_vehicle_info(year, make, model, trim):
         details += f"\nTrim: {trim}"
 
     prompt = f"""
-    Classify the following vehicle into one of four size categories: Small, Medium, Large, or Extra Large. 
-    Provide vehicle type, dimensions (length and width), passenger capacity, and purpose in JSON format.
+    Classify the following vehicle into one of four size categories: Small, Medium, Large, or Extra Large.
+    Provide vehicle type, dimensions (length and width), passenger capacity (can be a range like 3-6), and purpose in JSON format.
 
     # Details
     {details}
@@ -87,7 +92,7 @@ def call_gpt_for_vehicle_info(year, make, model, trim):
         "type": "Type of vehicle",
         "length": "Length in inches",
         "width": "Width in inches",
-        "capacity": "Number of passengers",
+        "capacity": "Capacity as a number or range (e.g., '3-6 passengers')",
         "purpose": "Purpose of the vehicle"
     }}
     """
@@ -98,75 +103,44 @@ def call_gpt_for_vehicle_info(year, make, model, trim):
             {"role": "system", "content": "You classify vehicles by size and attributes."},
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 300,  # Reduced token limit
+        "max_tokens": 300,
         "temperature": 0.5
     }
 
     max_retries = 5
-    retry_count = 0
-    gpt_response = None
-
-    while retry_count < max_retries:
+    for retry_count in range(max_retries):
         try:
             response = requests.post(API_ENDPOINT, headers=headers, json=payload)
             response.raise_for_status()
             result = response.json()
             content = result.get("choices", [{}])[0].get("message", {}).get("content")
 
-            logging.debug(f"GPT Response: {content}")
+            match = re.search(r"\{.*\}", content, re.DOTALL)
+            if match:
+                return json.loads(match.group())
+            else:
+                return {"error": "No valid JSON found in the response."}
 
-            gpt_response = json.loads(content) if content else {"error": "No information found."}
+        except (requests.exceptions.RequestException, json.JSONDecodeError):
+            time.sleep(1)
 
-            # Check if length and width are valid numbers
-            length = gpt_response.get("length")
-            width = gpt_response.get("width")
-
-            if length and width and length != "Unknown" and width != "Unknown":
-                break
-
-        except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-            logging.error(f"Error communicating with the GPT API or parsing JSON: {e}")
-            gpt_response = {"error": f"Error communicating with the GPT API or parsing JSON: {e}"}
-
-        retry_count += 1
-        logging.debug(f"Retry attempt {retry_count}")
-        time.sleep(1)  # Reduced retry delay to 1 second
-
-    return gpt_response if gpt_response else {"error": "No information found after multiple attempts."}
+    return {"error": "No information found after multiple attempts."}
 
 
 def classify_vehicle_based_on_gpt(year, make, model, trim):
-    """
-    Retrieves vehicle details from GPT, reclassifies using local sizing logic,
-    and returns custom HTML classification information with reasons.
-    """
     gpt_response = call_gpt_for_vehicle_info(year, make, model, trim)
 
     if "error" in gpt_response:
         return Markup(f"<p class='error-message'>{gpt_response['error']}</p>")
 
-    # Extract attributes from the response
-    category = gpt_response.get("category", "Unknown")
     vehicle_type = gpt_response.get("type", "Unknown")
     length = gpt_response.get("length", None)
     width = gpt_response.get("width", None)
     capacity = gpt_response.get("capacity", None)
     purpose = gpt_response.get("purpose", "Unknown")
 
-    # Clean and convert length and width to floats if they are strings
-    def clean_dimension(value):
-        try:
-            return float(re.sub(r"[^\d.]", "", value))
-        except (ValueError, TypeError):
-            return 0
-
-    length = clean_dimension(length)
-    width = clean_dimension(width)
-
-    try:
-        capacity = int(re.sub(r"[^\d]", "", capacity)) if capacity else None
-    except (ValueError, TypeError):
-        capacity = None
+    length = float(re.sub(r"[^\d.]", "", length) or 0)
+    width = float(re.sub(r"[^\d.]", "", width) or 0)
 
     local_category, reason = categorize_vehicle(length, width, capacity)
 
@@ -176,9 +150,9 @@ def classify_vehicle_based_on_gpt(year, make, model, trim):
         <div class="result-content">
             <p><strong>Vehicle:</strong> {year} {make} {model} {trim}</p>
             <p><strong>Type:</strong> {vehicle_type}</p>
-            <p><strong>Length:</strong> {length if length else 'Unknown'} inches</p>
-            <p><strong>Width:</strong> {width if width else 'Unknown'} inches</p>
-            <p><strong>Passenger Capacity:</strong> {capacity if capacity is not None else 'Unknown'}</p>
+            <p><strong>Length:</strong> {length} inches</p>
+            <p><strong>Width:</strong> {width} inches</p>
+            <p><strong>Passenger Capacity:</strong> {capacity}</p>
             <p><strong>Purpose:</strong> {purpose}</p>
             <h3>Reason for Classification:</h3>
             {reason}
@@ -187,6 +161,16 @@ def classify_vehicle_based_on_gpt(year, make, model, trim):
     """
 
     return Markup(result_html)
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template("404.html"), 404
+
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    return render_template("500.html"), 500
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -207,4 +191,4 @@ def home():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
