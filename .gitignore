@@ -1,16 +1,28 @@
-ve# Python
+# Python Bytecode
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 
 # Environment Variables
 .env
 
 # Virtual Environments
 venv/
+.env/
 *.egg-info/
+*.eggs/
 
 # IDE Configurations
-*.vscode/
+.vscode/
 .idea/
-nv/
+*.sublime-project
+*.sublime-workspace
+
+# Logs and Databases
+*.log
+*.sqlite3
+
+# OS-specific files
+.DS_Store
+Thumbs.db
