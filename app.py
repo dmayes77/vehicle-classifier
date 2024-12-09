@@ -30,7 +30,11 @@ def parse_capacity(capacity):
     if not capacity:
         return None, None
 
-    numbers = list(map(int, re.findall(r'\d+', capacity)))
+    # Convert capacity to a string to handle unexpected integer inputs
+    capacity_str = str(capacity)
+
+    # Extract numbers from the capacity string
+    numbers = list(map(int, re.findall(r'\d+', capacity_str)))
 
     if len(numbers) == 1:
         return numbers[0], numbers[0]  # Single capacity (e.g., '3 passengers')
@@ -38,6 +42,7 @@ def parse_capacity(capacity):
         return min(numbers), max(numbers)  # Range capacity (e.g., '3-6 passengers')
 
     return None, None
+
 
 
 def categorize_vehicle(length, width, capacity):
@@ -134,15 +139,17 @@ def classify_vehicle_based_on_gpt(year, make, model, trim):
         return Markup(f"<p class='error-message'>{gpt_response['error']}</p>")
 
     vehicle_type = gpt_response.get("type", "Unknown")
-    length = gpt_response.get("length", None)
-    width = gpt_response.get("width", None)
+    length = float(re.sub(r"[^\d.]", "", gpt_response.get("length", "")) or 0)
+    width = float(re.sub(r"[^\d.]", "", gpt_response.get("width", "")) or 0)
     capacity = gpt_response.get("capacity", None)
     purpose = gpt_response.get("purpose", "Unknown")
 
-    length = float(re.sub(r"[^\d.]", "", length) or 0)
-    width = float(re.sub(r"[^\d.]", "", width) or 0)
+    min_capacity, max_capacity = parse_capacity(capacity)
 
-    local_category, reason = categorize_vehicle(length, width, capacity)
+    # Use the lower capacity number for size categorization
+    capacity_for_category = min_capacity if min_capacity else None
+
+    local_category, reason = categorize_vehicle(length, width, capacity_for_category)
 
     result_html = f"""
     <div class="result">
